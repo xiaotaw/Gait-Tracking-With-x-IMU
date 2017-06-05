@@ -13,7 +13,7 @@ classdef AHRS < handle
     %% Private properties
     properties (Access = private)
         q = [1 0 0 0];              % internal quaternion describing the Earth relative to the sensor
-        IntError = [0 0 0]';        % integral error
+        IntError = [0 0 0]';        % integral error'
         KpRamped;                   % internal proportional gain used to ramp during initialisation
     end
 
@@ -75,7 +75,7 @@ classdef AHRS < handle
         end
         function obj = Reset(obj)
             obj.KpRamped = obj.KpInit;      % start Kp ramp-down
-            obj.IntError = [0 0 0]';      	% reset integral terms
+            obj.IntError = [0 0 0]';      	% reset integral terms '
             obj.q = [1 0 0 0];           	% set quaternion to alignment	
         end   
 %         function obj = StepDownKp(obj, Kp)

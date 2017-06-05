@@ -168,7 +168,7 @@ stationaryEnd = find([0; diff(stationary)] == 1);
 for i = 1:numel(stationaryEnd)
     driftRate = vel(stationaryEnd(i)-1, :) / (stationaryEnd(i) - stationaryStart(i));
     enum = 1:(stationaryEnd(i) - stationaryStart(i));
-    drift = [enum'*driftRate(1) enum'*driftRate(2) enum'*driftRate(3)];
+    drift = [enum'*driftRate(1) enum'*driftRate(2) enum'*driftRate(3)]; % '
     velDrift(stationaryStart(i):stationaryEnd(i)-1, :) = drift;
 end
 

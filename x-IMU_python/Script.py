@@ -19,10 +19,13 @@ from QuaternionsCALC import *
 
 # select dataset
 
-filePath = './Datasets/straightLine_CalInertialAndMag.csv'
-startTime = 6
-stopTime = 26
-#stopTime = 60
+# filePath = './Datasets/straightLine_CalInertialAndMag.csv'
+# startTime = 6
+# stopTime = 26
+
+filePath = './Datasets/spiralStairs_CalInertialAndMag.csv';
+startTime = 4;
+stopTime = 47;
 
 # Import data
 

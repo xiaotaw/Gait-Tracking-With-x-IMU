@@ -49,7 +49,7 @@ class AHRS:
         # Normalise accelerometer measurement
         if np.linalg.norm(Accelerometer) == 0:
             print("Accelerometer magnitude is zero.  Algorithm update aborted.")
-            assert False
+            return False
         else:
             Accelerometer = Accelerometer / np.linalg.norm(Accelerometer)
         # Compute error between estimated and measured direction of gravity
@@ -72,6 +72,7 @@ class AHRS:
 
         # Store conjugate
         self.Quaternion = self.quaternConj(self.q)
+        return True
 
 
 

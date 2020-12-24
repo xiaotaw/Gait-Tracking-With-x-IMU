@@ -1,3 +1,4 @@
+from __future__ import print_function
 import os, sys
 print("sys.version:{}".format(sys.version))
 
@@ -11,25 +12,38 @@ from mpl_toolkits.mplot3d import Axes3D
 import mpl_toolkits.mplot3d.axes3d as p3
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
-from scipy.signal import butter, lfilter, bode
+from scipy.signal import butter, lfilter, filtfilt, bode
 
 import xIMUdataClass
 import AHRS
 from QuaternionsCALC import *
 
+Gravity = 9.8
+
+
 # select dataset
+filePath = './Datasets/imu_zupt.csv'
+startTime = 34
+stopTime = 260
 
-# filePath = './Datasets/straightLine_CalInertialAndMag.csv'
-# startTime = 6
-# stopTime = 26
+filePath = './Datasets/20201216-desk.csv'
+startTime = 1
+stopTime = 70
 
-filePath = './Datasets/spiralStairs_CalInertialAndMag.csv';
-startTime = 4;
-stopTime = 47;
+"""
+filePath = './Datasets/straightLine_CalInertialAndMag.csv'
+startTime = 6
+stopTime = 26
+"""
+
+#filePath = './Datasets/spiralStairs_CalInertialAndMag.csv';
+#startTime = 4;
+#stopTime = 47;
 
 # Import data
 
-samplePeriod = 1.0/256.0
+#samplePeriod = 1.0/256.0
+samplePeriod = 1.0/200.0
 xIMUdata = xIMUdataClass.xIMUdata(filePath, samplePeriod)
 time = xIMUdata.Time
 gyrX = xIMUdata.Gyroscope_X
@@ -45,10 +59,10 @@ accZ = xIMUdata.Accelerometer_Z
 idxStart = -1
 idxEnd = -1
 for i in range(len(time)):
-	if time[i] < startTime:
-		idxStart = i
-	if time[i] <  stopTime:
-		idxEnd = i
+    if time[i] < startTime:
+        idxStart = i
+    if time[i] <  stopTime:
+        idxEnd = i
 print("idxStart:{}, idxEnd:{}".format(idxStart, idxEnd))
 time = np.array(time[idxStart:idxEnd])
 gyrX = np.array(gyrX[idxStart:idxEnd])
@@ -60,22 +74,25 @@ accZ = np.array(accZ[idxStart:idxEnd])
 
 # Detect stationary periods
 # Compute accelerometer magnitude
-acc_mag = np.sqrt(accX*accX + accY*accY + accZ*accZ);
+acc_mag = np.sqrt(accX*accX + accY*accY + accZ*accZ) - 1;
 #print("acc_mag:{}".format(acc_mag))
 # HP filter accelerometer data
-filtCutOff = 0.001;
+filtCutOff = 0.0001;
 b, a = butter(1, (2*filtCutOff)/(1/samplePeriod), 'high')
-acc_magFilt1 = lfilter(b, a, acc_mag)
+#acc_magFilt1 = lfilter(b, a, acc_mag)
+acc_magFilt1 = filtfilt(b, a, acc_mag)
 
 # Compute absolute value
 acc_magFilt1 = np.abs(acc_magFilt1)
 
 # LP filter accelerometer data
-filtCutOff = 5
+filtCutOff = 4
 b, a = butter(1, (2*filtCutOff)/(1/samplePeriod), 'low')
-acc_magFilt = lfilter(b, a, acc_magFilt1)
+#acc_magFilt = lfilter(b, a, acc_magFilt1)
+acc_magFilt = filtfilt(b, a, acc_magFilt1)
 #print("acc_magFilt:{}".format(acc_magFilt))
 
+# Threshold detection
 fig = plt.figure(figsize=[15,8])
 ax = fig.add_subplot(311)
 ax.plot(acc_mag)
@@ -84,15 +101,16 @@ ax.plot(acc_magFilt1)
 ax = fig.add_subplot(313)
 ax.plot(acc_magFilt)
 plt.show()
-exit(-1)
+#exit(-1)
 
-# Threshold detection
-stationary = np.less(acc_magFilt, 1.05)
-print("stationary:{}".format(stationary))
+stationary = np.less(acc_magFilt, 0.035)
+#print("stationary:{}".format(stationary))
+
+print("stationary rate:{}".format(stationary.sum() / len(stationary)))
 '''
 for i in range(len(stationary)):
-	if stationary[i] == False:
-		print i
+    if stationary[i] == False:
+        print i
 '''
 # Plot data raw sensor data and stationary periods
 fig = plt.figure(figsize=[15,8])
@@ -123,22 +141,31 @@ AHRSalgorithm = AHRS.AHRS(SamplePeriod=1.0/256.0, Kp=1, Ki=0, KpInit=1)
 # Initial convergence
 initPeriod = time[0] + 2.0;
 for i in range(len(time)):
-	#print("time[i]:{}".format(time[i]))
-	if time[i] < initPeriod:
-		idxEnd = i
+    #print("time[i]:{}".format(time[i]))
+    if time[i] < initPeriod:
+        idxEnd = i
 #print("idxEnd:{}".format(idxEnd))
-for i in range(2000):
-	AHRSalgorithm.UpdateIMU(np.array([0,0,0]), np.array([np.mean(accX[0:idxEnd]),np.mean(accY[0:idxEnd]),np.mean(accZ[0:idxEnd])]))
+
+for _ in range(10):
+    for i in range(2000):
+        ret = AHRSalgorithm.UpdateIMU(np.array([0,0,0]), np.array([np.mean(accX[0:idxEnd]),np.mean(accY[0:idxEnd]),np.mean(accZ[0:idxEnd])]))
+        if (not ret):
+            print("initial convergence failed at line: %d" % i, end="\r")
+    print("")
+    print("AHRSalgorithm.q", AHRSalgorithm.q)
 
 # For all data
 for t in range(len(time)):
-	if stationary[t] == True:
-		AHRSalgorithm.Kp = 0.5
-	else:
-		AHRSalgorithm.Kp = 0
-	AHRSalgorithm.UpdateIMU(np.deg2rad([gyrX[t], gyrY[t], gyrZ[t]]),
-		                    [accX[t], accY[t], accZ[t]])
-	quat[t,:] = AHRSalgorithm.Quaternion
+    if stationary[t] == True:
+        AHRSalgorithm.Kp = 0.5
+    else:
+        AHRSalgorithm.Kp = 0
+    ret = AHRSalgorithm.UpdateIMU(np.deg2rad([gyrX[t], gyrY[t], gyrZ[t]]),
+                            [accX[t], accY[t], accZ[t]])
+    if (not ret):
+        print("update all data failed at line: %d" % t, end="\r")
+    quat[t,:] = AHRSalgorithm.Quaternion
+print("")
 
 # Compute translational accelerations
 # Rotate body accelerations to Earth frame
@@ -153,7 +180,7 @@ print("acc:{}".format(acc))
 #acc = np.column_stack((accX, accY, accZ))
 
 # Convert acceleration measurements to m/s/s
-acc = acc * 9.81
+acc = acc * Gravity
 
 # Plot translational accelerations
 fig = plt.figure()
@@ -168,15 +195,15 @@ ax.legend(loc='upper left')
 
 # Compute translational velocities
 
-acc[:,2] = acc[:,2] - 9.81;
+acc[:,2] = acc[:,2] - Gravity;
 
 # Integrate acceleration to yield velocity
 
 vel = np.zeros_like(acc)
 for t in range(1,len(vel)):
-	vel[t,:] = vel[t-1,:] + acc[t,:] * samplePeriod
-	if stationary[t] == True:
-		vel[t,:] = [0, 0, 0] # force zero velocity when foot stationary
+    vel[t,:] = vel[t-1,:] + acc[t,:] * samplePeriod
+    if stationary[t] == True:
+        vel[t,:] = [0, 0, 0] # force zero velocity when foot stationary
 
 # Plot translational velocity
 fig = plt.figure()
@@ -194,7 +221,7 @@ ax.legend(loc='upper left')
 # Integrate velocity to yield position
 pos = np.zeros_like(vel)
 for t in range(1,len(pos)):
-	pos[t,:] = pos[t-1,:] + vel[t,:] * samplePeriod # integrate velocity to yield position
+    pos[t,:] = pos[t-1,:] + vel[t,:] * samplePeriod # integrate velocity to yield position
 
 # Plot translational position
 fig = plt.figure()

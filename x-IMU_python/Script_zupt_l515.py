@@ -1,7 +1,5 @@
 from __future__ import print_function
 import os, sys
-
-import rosbag
 print("sys.version:{}".format(sys.version))
 
 sys.path.append("./Quaternions/")
@@ -18,7 +16,7 @@ from scipy.signal import butter, lfilter, filtfilt, bode
 
 import AHRS
 from QuaternionsCALC import *
-from RosBagExtractor import RosBagExtractor, write_pose_pc_into_bag
+from RosBagExtractor import RosBagExtractor
 
 """
 filePath = './Datasets/straightLine_CalInertialAndMag.csv'
@@ -30,26 +28,24 @@ stopTime = 26
 #stopTime = 47;
 """
 
-filePath = "/data/DATASETS/IMU/6_HorizontalPutOnDesk_1gACC.bag"
-filePath = "/data/DATASETS/IMU/9_HorizontalHand_1gACC.bag"
-#filePath = "/data/DATASETS/IMU/10_VerticalPutOnDesk_1gACC.bag"
 
-#filePath = "/data/DATASETS/IMU/15_horizontalPotOnDesk_static.bag"
-# filePath = "/data/DATASETS/IMU/16_HorizontalSquare.bag"
-filePath = "/data/DATASETS/IMU/17_VerticalSquare.bag"
-# filePath = "/data/DATASETS/IMU/18_VerticalSquare_slower.bag"
-# filePath = "/data/DATASETS/IMU/19_VerticalSquare_anchor.bag"
-# filePath = "/data/DATASETS/IMU/20_VerticalSquare_more_slower.bag"
-filePath = "/data/DATASETS/IMU/21_VerticalSquare_more_step.bag"
-
-
-filePath = "/data/DATASETS/IMU/22_VerticalSquare_free_rotate.bag"
-#filePath = "/data/DATASETS/IMU/23_Horizontal_Desk_Hand_Desk_static.bag"
-#filePath = "/data/DATASETS/IMU/24_Horizontal_StraightLine_DeskFast.bag"
-#filePath = "/data/DATASETS/IMU/25_Horizontal_StraightLineBack_DeskFaster.bag"
+filePath = "/data/DATASETS/IMU/l515/1_VerticalSquare.bag"
+filePath = "/data/DATASETS/IMU/l515/2_VerticalSquare_HandMidSpeed.bag"
+filePath = "/data/DATASETS/IMU/l515/3_VerticalSquare_HandFast.bag"
+#filePath = "/data/DATASETS/IMU/l515/4_Horizontal_StraightLine_DeskFast.bag"
+filePath = "/data/DATASETS/IMU/l515/5_HorizontalSquare.bag"
+#filePath = "/data/DATASETS/IMU/l515/6_Horizontal_StraightLineBack_DeskFast.bag"
+#filePath = "/data/DATASETS/IMU/l515/7_Horizontal_StraightLineBack_DeskFaster.bag"
+#filePath = "/data/DATASETS/IMU/l515/8_HorizontalUp_static.bag"
+#filePath = "/data/DATASETS/IMU/l515/9_HorizontalDown_static.bag"
+#filePath = "/data/DATASETS/IMU/l515/10_AnchorOnDesk.bag"
 
 
-#filePath = "/data/DATASETS/IMU_CAM/1_room_DeskFast.bag"
+
+
+
+
+
 
 
 
@@ -58,21 +54,27 @@ if len(sys.argv) == 2:
 
 # intrinsic of imu
 # /data/DATASETS/IMU/imu_tk/YIS100-U-DK-horizontal-imu_acc.calib
+
 acc_misalignment = np.array([
-    1, 0.00714771, 0.000162677,
-    -0.00784456, 1, -0.000988988,
-    -0.00304139, 0.000783805, 1
+          1,  -0.0020787, -0.00262097,
+          0,           1,  -0.0040836,
+         -0,           0,           1,
 ]).reshape([3, 3])
-acc_scale = np.array([0.996896, 0.998036, 0.996834])
-acc_bias = np.array([0.588407, 0.0300896, 0.099099])
+acc_scale = np.array([1.00813, 1.00447, 1.00714])
+acc_bias = np.array([-0.0426319,  -0.114644, -0.0283882])
 
 
 Gravity = 9.8
 # Import data
 extractor = RosBagExtractor(filePath)
 print(extractor.rosbag_path)
-ts, acc, gyr = extractor.read_imu("/imu/data", "g", "deg/s")
-ts_, _, ori = extractor.read_pose("/imu/pose")
+ts, acc, gyr = extractor.read_imu("/camera/imu", "g", "deg/s")
+ts_, pos, ori = extractor.read_pose("/imu/pose")
+
+# realsense l515: the 1st imu data's stamp is not valid
+start_idx = 5
+ts, acc, gyr = ts[start_idx:], acc[start_idx:], gyr[start_idx:]
+ts_, pos, ori = ts_[start_idx:], pos[start_idx:], ori[start_idx:]
 
 acc_mean_1000 = 9.8 * acc[:1000].mean(axis=0)
 print("before calib: {}, {}".format(acc_mean_1000, np.linalg.norm(acc_mean_1000)))
@@ -80,7 +82,6 @@ acc = np.matmul(acc_misalignment, (acc_scale * (9.8 * acc - acc_bias)).T).T
 acc_mean_1000 = acc[:1000].mean(axis=0)
 print("before calib: {}, {}".format(acc_mean_1000, np.linalg.norm(acc_mean_1000)))
 acc = acc / 9.8
-
 
 samplePeriod_ = (ts[-1] - ts[0]) / (len(ts) - 1)
 samplePeriod = round(samplePeriod_, 4)
@@ -93,6 +94,8 @@ accX, accY, accZ = acc[:, 0], acc[:, 1], acc[:, 2]
 # Detect stationary periods
 # Compute accelerometer magnitude
 acc_mag = np.linalg.norm(acc, axis=1);
+print("acc_mag mean: %f" % acc_mag.mean())
+#exit(-1)
 #print("acc_mag:{}".format(acc_mag))
 # HP filter accelerometer data
 filtCutOff = 0.001;
@@ -110,6 +113,12 @@ b, a = butter(1, (2*filtCutOff)/(1/samplePeriod), 'low')
 acc_magFilt = filtfilt(b, a, acc_magFilt1)
 #print("acc_magFilt:{}".format(acc_magFilt))
 
+
+
+# delta_t = [ts[i+1]-ts[i] for i in range(len(ts)-1)]
+# plt.hist(delta_t, bins=100, log=True)
+# plt.show()
+
 # Threshold detection
 fig = plt.figure(figsize=[15,8])
 ax = fig.add_subplot(311)
@@ -124,7 +133,7 @@ plt.show()
 stationary = np.less(acc_magFilt, 0.050)
 #print("stationary:{}".format(stationary))
 
-print("stationary rate:{}".format(stationary.sum() / len(stationary)))
+print("stationary rate:{}".format(1.0 * stationary.sum() / len(stationary)))
 '''
 for i in range(len(stationary)):
     if stationary[i] == False:
@@ -165,8 +174,9 @@ for i in range(len(time)):
         idxEnd = i
 print("idxEnd:{}".format(idxEnd))
 
+Gravity_obs_whole = Gravity * (acc_mag * stationary).mean()
 Gravity_obs = Gravity * np.mean(acc_mag[:1000])
-print("Gravity obs: %f" % Gravity_obs)
+print("Gravity obs: %f, Gravity obs whole: %f " % (Gravity_obs, Gravity_obs_whole))
 
 
 for _ in range(3):
@@ -180,7 +190,7 @@ for _ in range(3):
 # For all data
 for t in range(len(time)):
     if stationary[t] == True:
-        AHRSalgorithm.Kp = 0.5
+        AHRSalgorithm.Kp = 0.7
     else:
         AHRSalgorithm.Kp = 0
     ret = AHRSalgorithm.UpdateIMU(np.deg2rad([gyrX[t], gyrY[t], gyrZ[t]]),
@@ -207,9 +217,19 @@ print("acc:{}".format(acc))
 # Convert acceleration measurements to m/s/s
 acc = acc * Gravity
 
+# 10 ~ 30
+filtCutOff = 10
+b, a = butter(1, (2*filtCutOff)/(1/samplePeriod), 'low')
+acc_Fx = filtfilt(b, a, acc[:,0])
+acc_Fy = filtfilt(b, a, acc[:,1])
+acc_Fz = filtfilt(b, a, acc[:,2])
+acc_F = np.vstack([acc_Fx, acc_Fy, acc_Fz]).T
+print("acc.shape: {}".format(acc.shape))
+print("acc_F.shape: {}".format(acc_F.shape))
+
 # Plot translational accelerations
 fig = plt.figure()
-ax = fig.add_subplot(111)
+ax = fig.add_subplot(211)
 ax.plot(time, acc[:,0], 'r', label='X')
 ax.plot(time, acc[:,1], 'g', label='Y')
 ax.plot(time, acc[:,2], 'b', label='Z')
@@ -217,11 +237,21 @@ ax.set_title('Acceleration')
 ax.set_xlabel('Time (s)')
 ax.set_ylabel('Acceleration (m/s/s)')
 ax.legend(loc='upper left')
+ax = fig.add_subplot(212)
+ax.plot(time, acc_F[:,0], 'r-', label='X')
+ax.plot(time, acc_F[:,1], 'g-', label='Y')
+ax.plot(time, acc_F[:,2], 'b-', label='Z')
+ax.set_title('Acceleration')
+ax.set_xlabel('Time (s)')
+ax.set_ylabel('Acceleration (m/s/s)')
+ax.legend(loc='upper left')
 
 # Compute translational velocities
+acc = acc_F
 
-acc[:,2] = acc[:,2] - Gravity;
+acc[:,2] = acc[:,2] - Gravity_obs;
 
+# Integrate acceleration to yield velocity
 
 
 stationary_diff = stationary.astype(int)[1:] - stationary.astype(int)[:-1] 
@@ -275,33 +305,7 @@ pos = np.zeros_like(vel)
 for t in range(1,len(pos)):
     pos[t,:] = pos[t-1,:] + vel[t,:] * samplePeriod # integrate velocity to yield position
 
-
 print("end_pos - start_pos: {}".format(pos[-1] - pos[0]))
-
-print("length time: %d, acc: %d, vel: %d, pos: %d, ori: %d" % (len(time), len(acc), len(vel), len(pos), len(ori)))
-print(time[:5]) 
-## write data into rosbag
-ts_pc_lst, pc_lst = extractor.read_pointcloud("/camera_argus100/publish_point_cloud")
-
-output_lst = []
-cur_pc_idx = 0
-for i in range(len(time)):
-    if cur_pc_idx >= len(pc_lst):
-        break
-    pc_time = ts_pc_lst[cur_pc_idx]
-    pc = pc_lst[cur_pc_idx]
-    if pc_time < time[i] - 0.5 * samplePeriod:
-        print("WARNING: drop pointcloud: %d" % cur_pc_idx)
-    elif pc_time < time[i] + 0.5 * samplePeriod: 
-        output_lst.append([time[i], pos[i], ori[i], pc_lst[cur_pc_idx]])
-        cur_pc_idx += 1
-
-write_pose_pc_into_bag(filePath.replace(".bag", "_output.bag"), output_lst)
-
-
-
-
-
 
 # Plot translational position
 #displacement = np.linalg.norm(pos, axis=1)
@@ -329,36 +333,36 @@ ax.set_ylim(*ylim)
 ax.set_zlim(*zlim)
 ax.legend()
 
-def update_lines(num, dataLines, lines) :
-    for line, data in zip(lines, dataLines) :
-        line.set_data(data[0:2, num-1:num])
-        line.set_3d_properties(data[2,num-1:num])
-    return lines
+# def update_lines(num, dataLines, lines) :
+#     for line, data in zip(lines, dataLines) :
+#         line.set_data(data[0:2, num-1:num])
+#         line.set_3d_properties(data[2,num-1:num])
+#     return lines
 
-fig = plt.figure()
-ax = p3.Axes3D(fig)
+# fig = plt.figure()
+# ax = p3.Axes3D(fig)
 
-n = len(time)
-data = [np.vstack((pos[:,0],pos[:,1],pos[:,2]))]
-print("pos:{}".format(pos))
-print("data:{}".format(data))
+# n = len(time)
+# data = [np.vstack((pos[:,0],pos[:,1],pos[:,2]))]
+# # print("pos:{}".format(pos))
+# # print("data:{}".format(data))
 
-lines = [ax.plot(data[0][0,0:1], data[0][1,0:1], data[0][2,0:1], 'o')[0]]
+# lines = [ax.plot(data[0][0,0:1], data[0][1,0:1], data[0][2,0:1], 'o')[0]]
 
 
-# Setthe axes properties
-ax.set_xlim3d(xlim)
-ax.set_xlabel('X')
-ax.set_ylim3d(ylim)
-ax.set_ylabel('Y')
-ax.set_zlim3d(ylim)
-ax.set_zlabel('Z')
+# # Setthe axes properties
+# ax.set_xlim3d(xlim)
+# ax.set_xlabel('X')
+# ax.set_ylim3d(ylim)
+# ax.set_ylabel('Y')
+# ax.set_zlim3d(ylim)
+# ax.set_zlabel('Z')
 
-ax.set_title('foot position animation')
+# ax.set_title('foot position animation')
 
-# Creating the Animation object
-ani = animation.FuncAnimation(fig, update_lines, n, fargs=(data, lines),
-                              interval=1, blit=False)
+# # Creating the Animation object
+# ani = animation.FuncAnimation(fig, update_lines, n, fargs=(data, lines),
+#                               interval=1, blit=False)
 
 plt.show()
 

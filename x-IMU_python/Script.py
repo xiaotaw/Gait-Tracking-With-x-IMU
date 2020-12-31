@@ -23,6 +23,10 @@ from QuaternionsCALC import *
 # startTime = 6
 # stopTime = 26
 
+filePath = './Datasets/4.csv';
+startTime = 0;
+stopTime = 47;
+
 filePath = './Datasets/spiralStairs_CalInertialAndMag.csv';
 startTime = 4;
 stopTime = 47;
@@ -42,7 +46,7 @@ accZ = xIMUdata.Accelerometer_Z
 #print("time:{}".format(time))
 
 # Manually frame data
-idxStart = -1
+idxStart = 0
 idxEnd = -1
 for i in range(len(time)):
 	if time[i] < startTime:
@@ -84,7 +88,6 @@ ax.plot(acc_magFilt1)
 ax = fig.add_subplot(313)
 ax.plot(acc_magFilt)
 plt.show()
-exit(-1)
 
 # Threshold detection
 stationary = np.less(acc_magFilt, 1.05)

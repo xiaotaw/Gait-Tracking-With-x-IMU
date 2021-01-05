@@ -43,13 +43,13 @@ filePath = "/data/DATASETS/IMU/17_VerticalSquare.bag"
 filePath = "/data/DATASETS/IMU/21_VerticalSquare_more_step.bag"
 
 
-filePath = "/data/DATASETS/IMU/22_VerticalSquare_free_rotate.bag"
+#filePath = "/data/DATASETS/IMU/22_VerticalSquare_free_rotate.bag"
 #filePath = "/data/DATASETS/IMU/23_Horizontal_Desk_Hand_Desk_static.bag"
-#filePath = "/data/DATASETS/IMU/24_Horizontal_StraightLine_DeskFast.bag"
+filePath = "/data/DATASETS/IMU/24_Horizontal_StraightLine_DeskFast.bag"
 #filePath = "/data/DATASETS/IMU/25_Horizontal_StraightLineBack_DeskFaster.bag"
 
 
-#filePath = "/data/DATASETS/IMU_CAM/1_room_DeskFast.bag"
+filePath = "/data/DATASETS/IMU_CAM/1_room_DeskFast.bag"
 
 
 
@@ -278,11 +278,14 @@ for t in range(1,len(pos)):
 
 print("end_pos - start_pos: {}".format(pos[-1] - pos[0]))
 
-print("length time: %d, acc: %d, vel: %d, pos: %d, ori: %d" % (len(time), len(acc), len(vel), len(pos), len(ori)))
+print("length time: %d, acc: %d, vel: %d, pos: %d, ori: %d, quat: %d" % 
+    (len(time), len(acc), len(vel), len(pos), len(ori), len(quat)))
+
 print(time[:5]) 
 ## write data into rosbag
 ts_pc_lst, pc_lst = extractor.read_pointcloud("/camera_argus100/publish_point_cloud")
 
+# get corresponding pose of IMU
 output_lst = []
 cur_pc_idx = 0
 for i in range(len(time)):
@@ -293,8 +296,40 @@ for i in range(len(time)):
     if pc_time < time[i] - 0.5 * samplePeriod:
         print("WARNING: drop pointcloud: %d" % cur_pc_idx)
     elif pc_time < time[i] + 0.5 * samplePeriod: 
-        output_lst.append([time[i], pos[i], ori[i], pc_lst[cur_pc_idx]])
+        #output_lst.append([time[i], pos[i], ori[i], pc_lst[cur_pc_idx]])
+        output_lst.append([time[i], pos[i], quat[i], pc_lst[cur_pc_idx]])
         cur_pc_idx += 1
+
+del pc_lst
+
+# get pose and pointcloud at static 
+output_lst_lst = []
+cur_pc_idx = 0
+for b, e in zip([0,] + moving_end[:-1], moving_begin):
+    tmp_lst = []
+    if(cur_pc_idx >= len(output_lst)):
+        break
+    while(cur_pc_idx < len(output_lst)):
+        pc_time = output_lst[cur_pc_idx][0]
+        if pc_time <= time[b]:
+            cur_pc_idx += 1
+        elif pc_time < time[e]:
+            tmp_lst.append(output_lst[cur_pc_idx])
+            cur_pc_idx += 1
+        else:
+            if len(tmp_lst)>0:
+                output_lst_lst.append(tmp_lst)
+                tmp_lst = []
+            break
+    else:
+        if len(tmp_lst) > 0:
+            output_lst_lst.append(tmp_lst)
+            tmp_lst = []
+
+output_lst = []
+for tmp_lst in output_lst_lst:
+    mid_idx = len(tmp_lst) // 2
+    output_lst.append(tmp_lst[mid_idx])
 
 write_pose_pc_into_bag(filePath.replace(".bag", "_output.bag"), output_lst)
 
